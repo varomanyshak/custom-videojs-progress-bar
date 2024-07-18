@@ -57,6 +57,14 @@
             player.on('loadedmetadata', function() {
               let newRemainTime = document.createElement('span');
               newRemainTime.classList.add('realRemainingTime');
+
+              let newProgressTime = document.createElement('div');
+              newProgressTime.classList.add('vjs-time-tooltip');
+              newProgressTime.classList.add('realTimeTip');
+              newProgressTime.setAttribute('aria-hidden', 'true');
+              newProgressTime.style.right = '-15px';
+              
+
               player.$('.vjs-remaining-time .vjs-remaining-time-display').style.display = "none";
               player.$('.vjs-remaining-time').appendChild(newRemainTime);
               player.$('.vjs-remaining-time .vjs-remaining-time-display').style.display = "none";
@@ -69,16 +77,14 @@
                 var loadProgressBar = seekBar.loadProgressBar;
                 var playProgressBar = seekBar.playProgressBar;
                 loadProgressBar.el().style.overflowX = 'hidden';
+                playProgressBar.el().querySelector("div").style.display = "none";
+                playProgressBar.el().appendChild(newProgressTime);
 
                 player.duration(duration);
 
                 progressControl.on('click', function(event) {
                   event.stopPropagation();
                   event.preventDefault();
-
-                  // var progress = (currentTime - startTime) / duration;
-                  // playProgressBar.el().style.transform = 'scaleX(' + progress + ')';
-
                   var seekBarRect = seekBar.el().getBoundingClientRect();
                   var clickX = event.clientX - seekBarRect.left;
                   var newTime = startTime + (clickX / seekBar.width()) * duration;
@@ -96,19 +102,9 @@
                   }
                 });
 
-                // seekBar.on('click', function(event) {
-                //   event.stopPropagation();
-                //   event.preventDefault();
-                //   var newTime = startTime + (event.offsetX / seekBar.width()) * duration;
-                //   player.currentTime(newTime);
-                // });
                 seekBar.on('mousedown', function(event) {
                   event.stopPropagation();
-                  event.preventDefault();
-
-                  // var progress = (currentTime - startTime) / duration;
-                  // playProgressBar.el().style.transform = 'scaleX(' + progress + ')';
-                  
+                  event.preventDefault();                  
                   var seekBarRect = seekBar.el().getBoundingClientRect();
                   var clickX = event.clientX - seekBarRect.left;
                   var newTime = startTime + (clickX / seekBar.width()) * duration;
@@ -135,9 +131,10 @@
                     var progress = (currentTime - startTime) / (endTime - startTime);
                   }
                   playProgressBar.el().style.transform = 'scaleX(' + progress + ')';
-                  playProgressBar.el().querySelector("div").style.transform = 'scaleX(' + 1/progress + ')';
+                  playProgressBar.el().querySelector(".realTimeTip").style.transform = 'scaleX(' + 1/progress + ')';
                   loadProgressBar.el().style.transform = 'scaleX(' + progress + ')';
                   player.$('.vjs-remaining-time .realRemainingTime').innerHTML = Math.floor((endTime-currentTime)/60) +":" + Math.floor((endTime-currentTime)%60);
+                  player.$(".vjs-play-progress .vjs-time-tooltip.realTimeTip").innerHTML = Math.floor((currentTime - startTime)/60) +":" + Math.floor((currentTime - startTime)%60);
                 });
             });
         });
