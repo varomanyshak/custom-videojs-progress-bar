@@ -7,6 +7,7 @@
       .vjs-progress-holder .vjs-load-progress {
         transform-origin: left;
         width: 100% !important;
+        touch-action: none;
       }
     </style>
   </head>
@@ -14,7 +15,7 @@
     <div>
       <p>This is static clip from 20s to 40s.</p>
       <video id="my-video1" class="video-js vjs-default-skin" controls preload="auto" width="640" height="264" data-setup="{}">
-        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4" type="video/mp4" />
+        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4" type="video/mp4">
         <p class="vjs-no-js"> To view this video please enable JavaScript, and consider upgrading to a web browser that \ <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
         </p>
       </video>
@@ -26,26 +27,16 @@
         var startTime = 240; // 20s in seconds
         var endTime = 320; // 40s in seconds
         var duration = endTime - startTime;
+        var seeking = false;
         // Start playback at the 3-minute mark
         player.currentTime(startTime);
-        // Update the progress bar
-        player.on('timeupdate', function() {
-          var currentTime = player.currentTime();
-          if (currentTime < startTime) {
-            player.currentTime(startTime);
-          } else if (currentTime > endTime) {
-            player.currentTime(endTime);
-            player.currentTime(startTime);
-            player.pause();
-          }
-          // let elapsedTime = currentTime - startTime;
-        });
-        player.on('play', function() {
-          if (player.currentTime() < startTime || player.currentTime() >= endTime) {
-            player.currentTime(startTime);
-          }
-        });
-        // Adjust the progress bar display
+        var duration = endTime - startTime;
+        var controlBar = player.controlBar;
+        var progressControl = controlBar.progressControl;
+        var seekBar = progressControl.seekBar;
+        var loadProgressBar = seekBar.loadProgressBar;
+        var playProgressBar = seekBar.playProgressBar;
+        var mouseTimeDisplay = seekBar.mouseTimeDisplay;
         let newRemainTime = document.createElement('span');
         newRemainTime.classList.add('realRemainingTime');
         let newProgressTime = document.createElement('div');
@@ -58,77 +49,130 @@
         newMouseDisplayTime.classList.add('realMouseTimeTip');
         newMouseDisplayTime.setAttribute('aria-hidden', 'true');
         newMouseDisplayTime.style.right = '-21px';
-        player.$('.vjs-remaining-time .vjs-remaining-time-display').style.display = 'none';
+        player.$('.vjs-remaining-time .vjs-remaining-time-display').style.display = "none";
         player.$('.vjs-remaining-time').appendChild(newRemainTime);
-        player.$('.vjs-remaining-time .vjs-remaining-time-display').style.display = 'none';
-        player.$('.vjs-remaining-time .realRemainingTime').innerHTML = Math.floor((endTime - startTime) / 60) + ':' + Math.floor((endTime - startTime) % 60);
-        var duration = endTime - startTime;
-        var controlBar = player.controlBar;
-        var progressControl = controlBar.progressControl;
-        var seekBar = progressControl.seekBar;
-        var loadProgressBar = seekBar.loadProgressBar;
-        var playProgressBar = seekBar.playProgressBar;
-        var mouseTimeDisplay = seekBar.mouseTimeDisplay;
+        player.$('.vjs-remaining-time .vjs-remaining-time-display').style.display = "none";
+        player.$('.vjs-remaining-time .realRemainingTime').innerHTML = Math.floor((endTime - startTime) / 60) + ":" + Math.floor((endTime - startTime) % 60);
         loadProgressBar.el().style.overflowX = 'hidden';
-        playProgressBar.el().querySelector('div').style.display = 'none';
+        if (playProgressBar.el().querySelector("div") != undefined) playProgressBar.el().querySelector("div").style.display = "none";
         playProgressBar.el().appendChild(newProgressTime);
-        mouseTimeDisplay.el().querySelector('div').style.display = 'none';
-        mouseTimeDisplay.el().appendChild(newMouseDisplayTime);
+        if (mouseTimeDisplay != undefined) {
+          if (mouseTimeDisplay.el().querySelector("div") != undefined) {
+            mouseTimeDisplay.el().querySelector("div").style.display = "none";
+          }
+          mouseTimeDisplay.el().appendChild(newMouseDisplayTime);
+        }
         player.duration(duration);
-        progressControl.on('mousedown', function(event) {
-          event.stopPropagation();
-          event.preventDefault();
+        var timeUpdateFunction = function() {
+          if (!seeking) {
+            var currentTime = player.currentTime();
+            if (currentTime < startTime) {
+              player.currentTime(startTime);
+            } else if (currentTime > endTime) {
+              player.currentTime(endTime);
+              player.currentTime(startTime);
+              player.pause();
+            }
+            if (currentTime < (endTime - startTime)) {
+              var progress = (currentTime - startTime) / currentTime;
+            } else {
+              var progress = (currentTime - startTime) / (endTime - startTime);
+            }
+            playProgressBar.el().style.transform = 'scaleX(' + progress + ')';
+            playProgressBar.el().querySelector(".realTimeTip").style.transform = 'scaleX(' + 1 / progress + ')';
+            loadProgressBar.el().style.transform = 'scaleX(' + progress + ')';
+            player.$('.vjs-remaining-time .realRemainingTime').innerHTML = Math.floor((endTime - currentTime) / 60) + ":" + Math.floor((endTime - currentTime) % 60);
+            player.$(".vjs-play-progress .vjs-time-tooltip.realTimeTip").innerHTML = Math.floor((currentTime - startTime) / 60) + ":" + Math.floor((currentTime - startTime) % 60);
+          }
+        }
+        // Update the progress bar
+        player.on('timeupdate', timeUpdateFunction);
+        player.on('play', function() {
+          if (player.currentTime() < startTime || player.currentTime() >= endTime) {
+            player.currentTime(startTime);
+          }
+        });
+        var getCustomTime = function() {
           var seekBarRect = seekBar.el().getBoundingClientRect();
-          var clickX = event.clientX - seekBarRect.left;
+          var clickX = (event.clientX || event.touches[0].clientX) - seekBarRect.left;
           var newTime = startTime + (clickX / seekBar.width()) * duration;
+          return newTime;
+        }
+        var mobileMouseEvent = function() {
+          var newTime = getCustomTime();
           player.currentTime(newTime);
+          seeking = false;
+          if (mouseTimeDisplay != undefined) player.$(".vjs-mouse-display .vjs-time-tooltip.realMouseTimeTip").innerHTML = Math.floor((newTime - startTime) / 60) + ":" + Math.floor((newTime - startTime) % 60);
+        } {
+          progressControl.on('touchstart', function(e) {
+            seeking = true;
+            e.preventDefault();
+            e.stopPropagation();
+            mobileMouseEvent()
+          });
+          progressControl.on('touchmove', function(e) {
+            seeking = true;
+            e.preventDefault();
+            e.stopPropagation();
+            mobileMouseEvent();
+          });
+          seekBar.on('touchstart', function(e) {
+            seeking = true;
+            e.preventDefault();
+            e.stopPropagation();
+            mobileMouseEvent();
+          });
+          seekBar.on('touchmove', function(e) {
+            seeking = true;
+            e.preventDefault();
+            e.stopPropagation();
+            mobileMouseEvent();
+          });
+        }
+        var desktopMouseDownEvent = function(event) {
+          var newTime = getCustomTime();
+          player.currentTime(newTime);
+          seeking = false;
+        }
+        var desktopMouseMoveEvent = function(event) {
+          var newTime = getCustomTime();
+          if (event.buttons === 1) {
+            player.currentTime(newTime);
+            seeking = false;
+          }
+          if (mouseTimeDisplay != undefined) player.$(".vjs-mouse-display .vjs-time-tooltip.realMouseTimeTip").innerHTML = Math.floor((newTime - startTime) / 60) + ":" + Math.floor((newTime - startTime) % 60);
+        }
+        progressControl.on('mousedown', function(event) {
+          seeking = true;
+          event.preventDefault();
+          event.stopPropagation();
+          desktopMouseDownEvent(event);
         });
         progressControl.on('mousemove', function(event) {
-          event.stopPropagation();
           event.preventDefault();
-          var seekBarRect = seekBar.el().getBoundingClientRect();
-          var clickX = event.clientX - seekBarRect.left;
-          var newTime = startTime + (clickX / seekBar.width()) * duration;
-          if (event.buttons === 1) {
-            // If the left mouse button is pressed
-            player.currentTime(newTime);
-          }
-          player.$('.vjs-mouse-display .vjs-time-tooltip.realMouseTimeTip').innerHTML = Math.floor((newTime - startTime) / 60) + ':' + Math.floor((newTime - startTime) % 60);
+          event.stopPropagation();
+          desktopMouseMoveEvent(event);
         });
-        seekBar.on('mousedown', function(event) {
-          event.stopPropagation();
+        progressControl.on('click', function(event) {
           event.preventDefault();
-          var seekBarRect = seekBar.el().getBoundingClientRect();
-          var clickX = event.clientX - seekBarRect.left;
-          var newTime = startTime + (clickX / seekBar.width()) * duration;
-          player.currentTime(newTime);
+        })
+        seekBar.on('mousedown', function(event) {
+          seeking = true;
+          event.preventDefault();
+          event.stopPropagation();
+          desktopMouseDownEvent(event);
         });
         seekBar.on('mousemove', function(event) {
-          event.stopPropagation();
           event.preventDefault();
-          var seekBarRect = seekBar.el().getBoundingClientRect();
-          var clickX = event.clientX - seekBarRect.left;
-          var newTime = startTime + (clickX / seekBar.width()) * duration;
-          if (event.buttons === 1) {
-            // If the left mouse button is pressed
-            player.currentTime(newTime);
-          }
-          player.$('.vjs-mouse-display .vjs-time-tooltip.realMouseTimeTip').innerHTML = Math.floor((newTime - startTime) / 60) + ':' + Math.floor((newTime - startTime) % 60);
+          event.stopPropagation();
+          desktopMouseMoveEvent(event);
         });
-        // Update the load and play progress bars
-        player.on('timeupdate', function() {
-          var currentTime = player.currentTime();
-          if (currentTime < endTime - startTime) {
-            var progress = (currentTime - startTime) / currentTime;
-          } else {
-            var progress = (currentTime - startTime) / (endTime - startTime);
-          }
-          playProgressBar.el().style.transform = 'scaleX(' + progress + ')';
-          playProgressBar.el().querySelector('.realTimeTip').style.transform = 'scaleX(' + 1 / progress + ')';
-          loadProgressBar.el().style.transform = 'scaleX(' + progress + ')';
-          player.$('.vjs-remaining-time .realRemainingTime').innerHTML = Math.floor((endTime - currentTime) / 60) + ':' + Math.floor((endTime - currentTime) % 60);
-          player.$('.vjs-play-progress .vjs-time-tooltip.realTimeTip').innerHTML = Math.floor((currentTime - startTime) / 60) + ':' + Math.floor((currentTime - startTime) % 60);
-        });
+        seekBar.on('click', function(event) {
+          event.preventDefault();
+        })
+        progressControl.on('click', function(event) {
+          event.preventDefault();
+        })
       });
     </script>
   </body>
